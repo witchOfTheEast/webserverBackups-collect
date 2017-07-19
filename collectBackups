@@ -1,0 +1,422 @@
+#!/bin/bash
+
+# Purpose: 
+#   Collect backup files from webservers by pulling from remote servers
+#   Copy and rename files locally to match the retention scheme
+#   Rotate and remove files falling out of the retention period
+#
+# Guidelines:
+#   Each backup file is to be a single archived and compressed file containing
+#   all files deemed relevant by the webmaster
+#
+#   Files will be retrieved via scp or sftp
+#   Retrieval must use a asymmetric key pair
+
+# Each server listed here must be:
+#   Added to the serverNameToIP array
+#   Added to the serverNameToUsername array
+#   Added to the case statement in main ()
+#   Added as a variable: <<servername>>Sites to enumerate the websites to back up
+
+#srcServerNames=("dev01" "doweb01" )
+srcServerNames=( "dev01" )
+
+# Declaring this is important because later indexing from the array doesn't get the right value otherwise
+declare -A serverNameToIP
+declare -A serverNameToUsername
+serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173");
+serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin");
+
+doweb01Sites=(  "amm" "mam" )
+dev01Sites=( "amm" )
+
+## Variables
+identityFilePath="/home/webadmin/.ssh/id_rsa"
+currentDate="$(date +%Y%m%0d)"
+
+currentYear="$(date +%Y)"
+#currentMonth="$(date +%m)"
+currentMonth=01
+#currentDay="$(date +%0d)"
+currentDay=01
+
+maxYears=6
+
+oldestYear=$(expr $currentYear - $maxYears)
+
+maxMonths=12 # This doesn't actually do anything. The number of months to use 
+             #is set in the for loop within monthly_rotation ()
+
+destDir="/home/webadmin/backups/"
+oldDir="/home/webadmin/backups/removedBackups/"
+fileExtension=".tar.gz"
+
+echo "The source server names are: ${srcServerNames[@]}"
+
+is_directory () {
+    # Return when the argument is longer than 0 and a valid directory
+    # exit if not
+    # Argument: $1
+
+    if [[ -z $1 ]]; then
+        echo "Received argument of length 0";
+        exit 1;
+    elif [[ ! -d $1 ]]; then
+            echo "$1 is not a valid directory";
+            exit 1;
+    else
+        return;
+    fi;
+}
+
+list_files () {
+    # Return a list of files for the specified directory
+    #
+    # Arguments: $1 -> a directory path
+
+    is_directory $1;
+    ls $1;
+
+}
+
+count_files () {
+    # Return the number of files in a directory matching a specified backup
+    # category
+    #
+    # Arguments: $1 -> a directory path
+    #            $2 -> file backup category; one of ( daily | monthly | yearly )
+
+    is_directory $1;
+    path=${1};
+    
+    if [[ -z $2 ]]; then
+        echo "$2 is not a valid argument";
+        exit 1;
+
+    else
+        category=${2}
+        case ${category} in 
+            daily)
+                ls $1 | grep -i daily | wc -l;
+                ;;
+            monthly)
+                ls $1 | grep -i monthly | wc -l;
+                ;;
+            yearly) 
+                ls $1 | grep -i yearly | wc -l;
+                ;;
+                
+            *)
+                echo "$2 is not a valid argument";
+                exit 1;
+                ;;
+        esac;
+    fi; 
+}
+
+daily_rotation () {
+    # Remove files older than 7 days from a directory
+    #
+    # Arguments: $1 -> a directory path
+
+    is_directory $1;
+    path=${1};
+    
+    keyword=daily
+
+    fileCount=$(count_files $path $keyword);
+    
+    echo "Starting number of $keyword files: $fileCount";
+
+    if [[ ${fileCount} -ge 7 ]]; then
+        echo "";
+        echo "Files older than 7 days from $currentDate";
+        find ${path} -mtime +7 -iname "*daily*";
+        
+        echo "";
+        echo "Old files will be ''deleted'' to ${oldDir}";
+        find ${path} -mtime +7 -iname "*daily*" -exec mv '{}' ${oldDir} \; ;
+        
+    fi;
+    
+    
+    fileCount=$(count_files $path $keyword);
+    echo -e "\n********************************************************************************";
+    echo -e "Ending number of $keyword files: $fileCount\n";
+    echo "";
+    ls $path | grep $keyword
+
+    echo -e "\n********************************************************************************\n";
+}
+
+monthly_rotation() {
+    # Remove files older than 6 months from a directory
+    # For younger than 6 months, remove all but the oldest file for that month
+    #
+    # Arguments: $1 -> a directory path
+    is_directory $1;
+    path=${1};
+
+    keyword=monthly
+
+    fileCount=$(count_files $path $keyword);
+    
+    echo "Total number of $keyword files: $fileCount";
+    echo ""
+    ls ${path} | grep $keyword 
+
+    echo "";
+    echo "Deleting files older than $(expr 346 / 30 ) months";
+
+    # Using +346 to catch files from the previous year/current month
+    find ${path} -mtime +346 -iname "*monthly*" -exec rm '{}' \;
+
+    # Important to only select files of the monthly category
+    unsortedArray=($(find ${path} -iname "*monthly*" -printf "%TY,%Tm,%Td,%T@,%p\n"))
+    sortedByYear=($(echo "${unsortedArray[@]}" | tr " " "\n" | sort | tr " " "\n"))
+
+    activeYear=$currentYear
+    activeMonth=$currentMonth
+    
+    # This range sets how many months to count back
+    for i in {0..11}; do
+            echo -e "\n********************************************************************************";
+        activeYear=$(date -d "-${i} month" +%Y);
+        activeMonth=$(date -d "-${i} month" +%m);
+            echo "Active year/month: ${activeYear}/$activeMonth";
+
+        selectedYearMonth=($(echo "${sortedByYear[@]}" |  awk -F, -vyear="$activeYear" -vmonth="$activeMonth" 'BEGIN { RS = " " }; $1 == year && $2 == month { print $0 }'));
+        numberOfElements=${#selectedYearMonth[@]};
+        lastIndex=$(expr ${#selectedYearMonth[@]} - 1);
+        
+            echo "There are ${#selectedYearMonth[@]} elements";
+            echo "";
+            echo ${selectedYearMonth[@]} | tr " " "\n";
+            echo "";
+
+        if [[ ${numberOfElements} -gt 1 ]]; then
+                echo -e "Items to delete:\n";
+                echo ${selectedYearMonth[@]:1:${lastIndex}} | tr " " "\n";
+                echo "";
+                echo "Deleting...";
+
+            rm $(echo ${selectedYearMonth[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
+
+                echo -e "Confirming the remaining files:\n";    
+            ls ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth}
+
+            else
+                echo "One file found per year/month. No additional files to delete.";
+        fi;
+
+    done;
+    
+    echo -e "\n********************************************************************************";
+    echo -e "Now there should be a maximum of ${maxMonths} $keyword files\n";
+
+        ls ${path} | grep $keyword 
+
+    echo -e "\n********************************************************************************\n";
+}
+
+yearly_rotation() {
+
+    # Remove files older than 5 years from a directory
+    # For files younger that 5 years, remove all but the oldest file in that year
+    #echo "";
+    is_directory $1;
+    path=$1
+
+    keyword=yearly
+   
+    fileCount=$(count_files $path $keyword);
+    
+    echo "Starting number of $keyword files: $fileCount";
+    echo ""
+    ls ${path} | grep yearly
+
+    echo "";
+    echo "Deleting files older than $(expr 1825 / 365) years.";
+    # 5 years equals 1825 days
+    find ${path} -mtime +1825 -iname "*yearly*" -exec rm '{}' \;
+
+
+    unsortedArray=($(find ${path} -iname "*yearly*" -printf "%TY,%Tm,%Td,%T@,%p\n"))
+    sortedByYear=($(echo "${unsortedArray[@]}" | tr " " "\n" | sort | tr " " "\n"))
+
+    activeYear=$currentYear
+
+    while [[ $activeYear -gt $oldestYear ]]; do
+            echo -e "\n********************************************************************************";
+            echo "The year is: $activeYear";
+            echo "";
+
+        selectedYear=($(echo "${sortedByYear[@]}" |  awk -F, -vyear="$activeYear" 'BEGIN { RS = " " }; $1 == year { print $0 }'));
+        numberOfElements=${#selectedYear[@]};
+        lastIndex=$(expr ${#selectedYear[@]} - 1);
+
+
+            echo "There are ${#selectedYear[@]} elements";
+            echo "";
+            echo ${selectedYear[@]} | tr " " "\n";
+            echo "";
+
+        if [[ ${numberOfElements} -gt 1 ]]; then
+                echo -e "Items to delete:\n";
+                echo ${selectedYear[@]:1:${lastIndex}} | tr " " "\n";
+                echo "";
+                echo "Deleting...";
+                echo "";
+
+            rm $(echo ${selectedYear[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
+
+                echo "";
+                echo -e "Confirming the remaining files:\n";    
+            ls ${path} | grep ${activeYear}
+
+                echo "";
+                echo "********";
+            else
+                echo "One file found per year. No additional files to delete.";
+        fi;
+        let "activeYear -= 1";
+
+    done;
+
+    echo -e "\n********************************************************************************";
+    echo -e "Now there should be a maximum of ${maxYears} ${keyword} files\n";
+
+        ls ${path} | grep yearly
+
+    echo -e "\n********************************************************************************\n";
+}
+
+pull_files () {
+    # Retrieve backup files from remote servers
+    # Copy and rename files 
+    # 
+    # Arguments: $1 -> path
+    #            $2 -> server name
+    #            $3  -> site name
+
+    path="${1}"; 
+    serverName=${2};
+    siteName=${3};
+   
+    serverIP=${serverNameToIP[${serverName}]};
+    serverUsername=${serverNameToUsername[$serverName]};
+
+    echo -e "Target Server: $serverName\nTarget IP: ${serverIP}\nTarget Site: $siteName\nFile destination: $path\n";
+
+    destFilePathName="${path}${serverName}_${siteName}_${currentDate}${fileExtension}"
+   
+    srcFileNamePath="backups/${siteName}_backup${fileExtension}";
+    echo "scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
+    scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+    
+    if ! [[ -e ${destFilePathName} ]]; then
+        echo "Something has gone wrong. After scp, ${destFilePathName} is missing.";
+        exit 1;
+    else
+        keywordArray=(daily);
+        
+        if [[ "${currentMonth}${currentDay}" == 0101 ]]; then
+            keywordArray+=("yearly");
+        fi;
+        
+        if [[ "${currentDay}" == 01 ]]; then
+            keywordArray+=("monthly");
+        fi;
+
+        
+        echo -e "The retrieval array:\n${keywordArray[@]}\n";
+        echo ${keywordArray[1]};
+        for keyword in ${keywordArray[@]}; do
+            
+            newFilePathName="${path}${serverName}_${siteName}_${keyword}_${currentDate}${fileExtension}"
+            cp ${destFilePathName} ${newFilePathName} 
+        done;
+
+        fileCount=$(ls ${path} | wc -l);
+        
+        if [[ ${fileCount} -ge 2 ]]; then
+            #rm ${destFilePathName};
+            ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+        fi
+    fi
+
+}
+
+execute_things () {
+        serverName="${1}";
+        siteName="${2}";
+        path="${destDir}${serverName}/${siteName}/";
+        
+        if [[ ! -d ${path} ]]; then
+            mkdir -p ${path};
+        fi;
+
+        echo "********************";
+        echo "Pulling backup files";
+        echo -e "********************\n";
+
+        pull_files $path $serverName $siteName;
+
+        echo "********************************"
+        echo "Starting rotation of daily files"
+        echo -e "********************************\n"
+
+        #daily_rotation $path;
+        
+        if [[ ${currentDay} == 01 ]]; then 
+
+            echo "**********************************"
+            echo "Starting rotation of monthly files"
+            echo -e "**********************************\n"
+
+        #    monthly_rotation $path;
+
+            if [[ ${currentMonth} == 01 ]];  then
+
+                echo "*********************************"
+                echo "Starting rotation of yearly files"
+                echo -e "*********************************\n"
+
+        #        yearly_rotation $path;
+            
+            fi;
+        fi;
+
+}
+
+main () {
+    # For server name, find the sites then execute the pull and rotation on each site
+    for i in ${srcServerNames[@]}; do
+        serverName="${i}";
+
+        case ${serverName} in
+            doweb01)
+                for siteName in ${doweb01Sites[@]}; do
+                    echo "$serverName $siteName";
+                    exit 1;
+                    execute_things $serverName $siteName;
+                done;
+                ;;
+
+            dev01)
+                for siteName in ${dev01Sites[@]}; do
+                    echo "$serverName $siteName";
+                    execute_things $serverName $siteName;
+                done;
+                ;;
+            *)
+                echo "Something is missing from the main::case";
+                exit 1;
+                ;;
+
+        esac
+    done
+}
+
+
+main;

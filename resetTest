@@ -1,0 +1,123 @@
+#!/bin/bash
+
+current_date="$(date +%Y%m%0d_%H%M)"
+
+current_month="$(date +%m)"
+
+src_serverNames=(amm lm mam);
+
+periods=(daily monthly yearly);
+
+dest_dir="/home/webadmin/backups/"
+
+old_dir="/home/webadmin/backups/removedBackups/"
+
+rm -rf ${dest_dir}*
+
+if ! [[ -d ${old_dir} ]]; then
+    mkdir -p ${old_dir};
+fi;
+
+# File name format: ministry_category_YYYYMMDD.fake
+for serverName in ${src_serverNames[@]}; do
+    path="${dest_dir}${serverName}/";
+    if ! [[ -d ${path} ]]; then
+        mkdir -p ${path};
+    fi;
+        
+    # monthly files
+    # 5 days in each month
+    # 3 years worth
+    # 30 days in 2016/06
+
+    for year in {15..16}; do
+
+        for month in {01..12}; do
+
+            for i in {1..5}; do
+                day=$(( ( RANDOM % 10 + 18 ) + 1 ))
+                touch -m -t ${year}${month}${day}1111 ${path}${serverName}_monthly_20${year}${month}${day}.fake;
+            done;
+
+        done;
+
+    done;
+
+    year=16
+    month=06
+
+        for day in {01..30}; do
+            touch -m -t ${year}${month}${day}1111 ${path}${serverName}_monthly_${year}${month}${day}.fake;
+        done;
+
+    year=17; 
+            for month in {01..06}; do
+
+                for i in {1..5}; do
+                    day=$(( ( RANDOM % 10 + 18 ) + 1 ))
+                    touch -m -t ${year}${month}${day}1111 ${path}${serverName}_monthly_20${year}${month}${day}.fake;
+                done;
+
+            done;
+
+    # yearly files
+    # 4 days in each month
+    # 17 years worth
+
+    for year in {00..16}; do
+
+        for month in {01..12}; do
+
+            for i in {1..4}; do
+                day=$(( ( RANDOM % 10 + 18 ) + 1 ))
+                touch -m -t ${year}${month}${day}1111 ${path}${serverName}_yearly_20${year}${month}${day}.fake;
+            done;
+        
+        done;
+
+    done;
+    
+    year=17;
+    for month in {01..06}; do
+
+            for i in {1..4}; do
+                day=$(( ( RANDOM % 10 + 18 ) + 1 ))
+                touch -m -t ${year}${month}${day}1111 ${path}${serverName}_yearly_20${year}${month}${day}.fake;
+            done;
+        
+    done;
+
+
+    # for daily files
+    # 21 days in each month
+    # 2 years worth
+    year=16
+
+            for month in {01..12}; do
+
+                for i in {01..21}; do
+                    day=${i};
+                    touch -m -t ${year}${month}${day}1111 ${path}${serverName}_daily_${year}${month}${day}.fake;
+                done;
+            
+            done;
+            
+    year=17
+    for month in {01..05}; do
+
+                for i in {01..21}; do
+                    day=${i};
+                    touch -m -t ${year}${month}${day}1111 ${path}${serverName}_daily_${year}${month}${day}.fake;
+                done;
+            
+            done;
+    month=06
+        for i in {01..13}; do
+            day=${i};
+            touch -m -t ${year}${month}${day}1111 ${path}${serverName}_daily_${year}${month}${day}.fake;
+        done;
+    
+
+
+done;
+#ls -lhR ${dest_dir};
