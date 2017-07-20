@@ -17,18 +17,22 @@
 #   Added to the serverNameToUsername array
 #   Added to the case statement in main ()
 #   Added as a variable: <<servername>>Sites to enumerate the websites to back up
+declare srcServerNames
 
-#srcServerNames=("dev01" "doweb01" )
-srcServerNames=( "dev01" )
+srcServerNames=("dev01" "doweb01" "lm")
+#srcServerNames=("dev01" "doweb01")
+#srcServerNames=("doweb01")
+#srcServerNames=( "dev01" )
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
 declare -A serverNameToIP
 declare -A serverNameToUsername
-serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173");
-serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin");
+serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7");
+serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle");
 
-doweb01Sites=(  "amm" "mam" )
-dev01Sites=( "amm" )
+doweb01Sites=("amm" "mam")
+dev01Sites=("amm")
+lmSites=("lm")
 
 ## Variables
 identityFilePath="/home/webadmin/.ssh/id_rsa"
@@ -398,13 +402,19 @@ main () {
             doweb01)
                 for siteName in ${doweb01Sites[@]}; do
                     echo "$serverName $siteName";
-                    exit 1;
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             dev01)
                 for siteName in ${dev01Sites[@]}; do
+                    echo "$serverName $siteName";
+                    execute_things $serverName $siteName;
+                done;
+                ;;
+
+            lm) 
+                for siteName in ${lmSites[@]}; do
                     echo "$serverName $siteName";
                     execute_things $serverName $siteName;
                 done;
