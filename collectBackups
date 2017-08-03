@@ -17,12 +17,38 @@
 #   Added to the serverNameToUsername array
 #   Added to the case statement in main ()
 #   Added as a variable: <<servername>>Sites to enumerate the websites to back up
+
+__LOGLEVEL=5
+
+#logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
+logFilePath=/var/log/backupadmin/scriptedBackup.log
+exec 1>>${logFilePath} 
+exec 2>>${logFilePath} 
+
+declare -A logNameToLevel
+logNameToLevel=([crit]="1" [error]="2" [warn]="3" [info]="4" [debug]="5")
+
+function .log () {
+    local levelName=${1};
+    local level=${logNameToLevel[${levelName}]};
+
+    # this moves the parameter numbers;
+    shift;
+    if [[ ${__LOGLEVEL} -ge ${level} ]]; then
+        echo -e "[${levelName}]" "$@";
+    fi;
+}
+
+
+timeStamp=$(date +%Y%m%0d-%H:%M:%S)
+.log debug "*****************"
+.log crit "${timeStamp}"
+
 declare srcServerNames
 
 srcServerNames=("dev01" "doweb01" "lm")
-#srcServerNames=("dev01" "doweb01")
-#srcServerNames=("doweb01")
-#srcServerNames=( "dev01" )
+#srcServerNames=("dev01")
+.log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
 declare -A serverNameToIP
@@ -34,15 +60,14 @@ doweb01Sites=("amm" "mam")
 dev01Sites=("amm")
 lmSites=("lm")
 
-## Variables
 identityFilePath="/home/webadmin/.ssh/id_rsa"
-currentDate="$(date +%Y%m%0d)"
 
+currentDate="$(date +%Y%m%0d)"
 currentYear="$(date +%Y)"
-#currentMonth="$(date +%m)"
-currentMonth=01
-#currentDay="$(date +%0d)"
-currentDay=01
+currentMonth="$(date +%m)"
+#currentMonth="01"
+currentDay="$(date +%0d)"
+#currentDay="01"
 
 maxYears=6
 
@@ -55,21 +80,24 @@ destDir="/home/webadmin/backups/"
 oldDir="/home/webadmin/backups/removedBackups/"
 fileExtension=".tar.gz"
 
-echo "The source server names are: ${srcServerNames[@]}"
-
 is_directory () {
     # Return when the argument is longer than 0 and a valid directory
     # exit if not
-    # Argument: $1
+    # Argument: $1 -> path
 
-    if [[ -z $1 ]]; then
-        echo "Received argument of length 0";
+    path="${1}";
+    .log debug "Starting is_directory ()";
+    .log debug "Testing ${path}";
+
+    if [[ -z "${path}" ]]; then
+        .log crit "is_directory () :: received argument of length 0";
         exit 1;
-    elif [[ ! -d $1 ]]; then
-            echo "$1 is not a valid directory";
-            exit 1;
+    elif [[ ! -d "${path}" ]]; then
+        .log crit "is_directory () :: ${path} is not a valid directory";
+        exit 1;
     else
-        return;
+        .log debug "is_directory (${path}) is true";
+        .log debug "Returning from is_directory ()";
     fi;
 }
 
@@ -77,7 +105,8 @@ list_files () {
     # Return a list of files for the specified directory
     #
     # Arguments: $1 -> a directory path
-
+    
+    .log debug "Starting list_files ()";
     is_directory $1;
     ls $1;
 
@@ -90,18 +119,22 @@ count_files () {
     # Arguments: $1 -> a directory path
     #            $2 -> file backup category; one of ( daily | monthly | yearly )
 
-    is_directory $1;
     path=${1};
-    
-    if [[ -z $2 ]]; then
-        echo "$2 is not a valid argument";
+    keyword="${2}";
+
+    #cannot make this log entry
+    #.log debug "Starting count_files ()";
+
+    if [[ -z "${keyword}" ]]; then
+        .log error "count_files () :: Received invalid argument: $2";
         exit 1;
 
     else
         category=${2}
         case ${category} in 
             daily)
-                ls $1 | grep -i daily | wc -l;
+                value="$(ls $1 | grep -i daily | wc -l)";
+                echo "${value}";
                 ;;
             monthly)
                 ls $1 | grep -i monthly | wc -l;
@@ -111,7 +144,7 @@ count_files () {
                 ;;
                 
             *)
-                echo "$2 is not a valid argument";
+                .log error "count_files:case :: Received invalid argument: $2";
                 exit 1;
                 ;;
         esac;
@@ -122,35 +155,29 @@ daily_rotation () {
     # Remove files older than 7 days from a directory
     #
     # Arguments: $1 -> a directory path
-
-    is_directory $1;
     path=${1};
+    .log debug "Starting daily_rotation ()";
     
-    keyword=daily
+    keyword="daily";
 
-    fileCount=$(count_files $path $keyword);
-    
-    echo "Starting number of $keyword files: $fileCount";
-
-    if [[ ${fileCount} -ge 7 ]]; then
-        echo "";
-        echo "Files older than 7 days from $currentDate";
+    fileCount=$(count_files ${path} ${keyword});
+   
+    .log debug "Initial number of ${keyword} files: ${fileCount}";
+    if [[ "${fileCount}" -ge 7 ]]; then
+        .log debug "Finding files older than ${currentDate} - 7 days";
         find ${path} -mtime +7 -iname "*daily*";
         
-        echo "";
-        echo "Old files will be ''deleted'' to ${oldDir}";
+        .log info "Old $keyword files ''deleted'' to ${oldDir}";
         find ${path} -mtime +7 -iname "*daily*" -exec mv '{}' ${oldDir} \; ;
         
     fi;
-    
+     
     
     fileCount=$(count_files $path $keyword);
-    echo -e "\n********************************************************************************";
-    echo -e "Ending number of $keyword files: $fileCount\n";
-    echo "";
-    ls $path | grep $keyword
+    .log debug "Ending number of $keyword files: $fileCount";
 
-    echo -e "\n********************************************************************************\n";
+    .log debug "Folder contents:\n$(ls $path | grep $keyword)";
+
 }
 
 monthly_rotation() {
@@ -158,19 +185,20 @@ monthly_rotation() {
     # For younger than 6 months, remove all but the oldest file for that month
     #
     # Arguments: $1 -> a directory path
-    is_directory $1;
+
+    .log debug "Starting monthly rotation ()";
+
     path=${1};
 
     keyword=monthly
 
     fileCount=$(count_files $path $keyword);
     
-    echo "Total number of $keyword files: $fileCount";
-    echo ""
-    ls ${path} | grep $keyword 
+    .log debug "Initial number of $keyword files: $fileCount";
 
-    echo "";
-    echo "Deleting files older than $(expr 346 / 30 ) months";
+    .log debug "$(ls ${path} | grep $keyword)";
+
+    .log debug "Finding files older than $(expr 346 / 30 ) months";
 
     # Using +346 to catch files from the previous year/current month
     find ${path} -mtime +346 -iname "*monthly*" -exec rm '{}' \;
@@ -184,43 +212,37 @@ monthly_rotation() {
     
     # This range sets how many months to count back
     for i in {0..11}; do
-            echo -e "\n********************************************************************************";
         activeYear=$(date -d "-${i} month" +%Y);
         activeMonth=$(date -d "-${i} month" +%m);
-            echo "Active year/month: ${activeYear}/$activeMonth";
+            .log debug "Active year/month: ${activeYear}/$activeMonth";
 
         selectedYearMonth=($(echo "${sortedByYear[@]}" |  awk -F, -vyear="$activeYear" -vmonth="$activeMonth" 'BEGIN { RS = " " }; $1 == year && $2 == month { print $0 }'));
         numberOfElements=${#selectedYearMonth[@]};
         lastIndex=$(expr ${#selectedYearMonth[@]} - 1);
         
-            echo "There are ${#selectedYearMonth[@]} elements";
-            echo "";
-            echo ${selectedYearMonth[@]} | tr " " "\n";
-            echo "";
+            .log debug "There are ${#selectedYearMonth[@]} elements";
+            .log debug $(echo ${selectedYearMonth[@]} | tr " " "\n");
 
         if [[ ${numberOfElements} -gt 1 ]]; then
-                echo -e "Items to delete:\n";
-                echo ${selectedYearMonth[@]:1:${lastIndex}} | tr " " "\n";
-                echo "";
-                echo "Deleting...";
-
+                .log debug  "Items to delete:\n";
+                .log debug ${selectedYearMonth[@]:1:${lastIndex}} | tr " " "\n";
+                .log debug "Deleting...";
             rm $(echo ${selectedYearMonth[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
-                echo -e "Confirming the remaining files:\n";    
-            ls ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth}
+                .log debug "The remaining files:\n";    
+                .log debug $(ls ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth});
 
             else
-                echo "One file found per year/month. No additional files to delete.";
+                .log info "One file found per year/month, no additional files deleted";
+                #echo "One file found per year/month, no additional files deleted";
+
         fi;
 
     done;
     
-    echo -e "\n********************************************************************************";
-    echo -e "Now there should be a maximum of ${maxMonths} $keyword files\n";
+    .log debug "Now there should be a maximum of ${maxMonths} $keyword files\n";
 
-        ls ${path} | grep $keyword 
-
-    echo -e "\n********************************************************************************\n";
+    .log debug $(ls ${path} | grep $keyword);
 }
 
 yearly_rotation() {
@@ -228,19 +250,19 @@ yearly_rotation() {
     # Remove files older than 5 years from a directory
     # For files younger that 5 years, remove all but the oldest file in that year
     #echo "";
-    is_directory $1;
+    .log debug "Starting yearly_rotation";
+
     path=$1
 
     keyword=yearly
    
     fileCount=$(count_files $path $keyword);
     
-    echo "Starting number of $keyword files: $fileCount";
-    echo ""
-    ls ${path} | grep yearly
+    .log debug "Starting number of $keyword files: $fileCount";
 
-    echo "";
-    echo "Deleting files older than $(expr 1825 / 365) years.";
+    .log debug "$(ls ${path} | grep yearly)";
+
+    .log debug "Finding files older than $(expr 1825 / 365) years.";
     # 5 years equals 1825 days
     find ${path} -mtime +1825 -iname "*yearly*" -exec rm '{}' \;
 
@@ -251,48 +273,38 @@ yearly_rotation() {
     activeYear=$currentYear
 
     while [[ $activeYear -gt $oldestYear ]]; do
-            echo -e "\n********************************************************************************";
-            echo "The year is: $activeYear";
-            echo "";
+        .log debug "The year is: $activeYear";
 
         selectedYear=($(echo "${sortedByYear[@]}" |  awk -F, -vyear="$activeYear" 'BEGIN { RS = " " }; $1 == year { print $0 }'));
         numberOfElements=${#selectedYear[@]};
         lastIndex=$(expr ${#selectedYear[@]} - 1);
 
 
-            echo "There are ${#selectedYear[@]} elements";
-            echo "";
-            echo ${selectedYear[@]} | tr " " "\n";
-            echo "";
+            .log debug  "There are ${#selectedYear[@]} elements";
+            .log debug $(echo ${selectedYear[@]} | tr " " "\n");
 
         if [[ ${numberOfElements} -gt 1 ]]; then
-                echo -e "Items to delete:\n";
-                echo ${selectedYear[@]:1:${lastIndex}} | tr " " "\n";
-                echo "";
-                echo "Deleting...";
-                echo "";
+                .log debug "Items to delete:\n";
+                .log debug $(echo ${selectedYear[@]:1:${lastIndex}} | tr " " "\n");
+                .log debug "Deleting...";
 
             rm $(echo ${selectedYear[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
-                echo "";
-                echo -e "Confirming the remaining files:\n";    
-            ls ${path} | grep ${activeYear}
+                .log debug "Confirming the remaining files:\n";    
+                .log debug $(ls ${path} | grep ${activeYear});
 
-                echo "";
-                echo "********";
             else
-                echo "One file found per year. No additional files to delete.";
+                .log debug "One file found per year. No additional files to delete.";
+                #echo "One file found per year. No additional files to delete.";
         fi;
         let "activeYear -= 1";
 
     done;
 
-    echo -e "\n********************************************************************************";
-    echo -e "Now there should be a maximum of ${maxYears} ${keyword} files\n";
+    .log debug "Now there should be a maximum of ${maxYears} ${keyword} files\n";
 
-        ls ${path} | grep yearly
+    .log debug "$(ls ${path} | grep yearly)";
 
-    echo -e "\n********************************************************************************\n";
 }
 
 pull_files () {
@@ -302,25 +314,28 @@ pull_files () {
     # Arguments: $1 -> path
     #            $2 -> server name
     #            $3  -> site name
-
+    
+    .log debug "Starting pull_files ()";
     path="${1}"; 
     serverName=${2};
     siteName=${3};
    
     serverIP=${serverNameToIP[${serverName}]};
     serverUsername=${serverNameToUsername[$serverName]};
+    .log debug "IP: ${serverIP}";
 
-    echo -e "Target Server: $serverName\nTarget IP: ${serverIP}\nTarget Site: $siteName\nFile destination: $path\n";
+    srcFileNamePath="backups/${siteName}_backup${fileExtension}";
+    .log info "Source file: ${srcFileNamePath}";
 
     destFilePathName="${path}${serverName}_${siteName}_${currentDate}${fileExtension}"
-   
-    srcFileNamePath="backups/${siteName}_backup${fileExtension}";
-    echo "scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
+    .log info "Destination File: ${destFilePathName}";
+
+    .log debug "Running: scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
     scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
-    
+
     if ! [[ -e ${destFilePathName} ]]; then
-        echo "Something has gone wrong. After scp, ${destFilePathName} is missing.";
-        exit 1;
+        .log  error "scp failed. NOT FOUND - ${destFilePathName}";
+        #echo "scp failed. NOT FOUND - ${destFilePathName}";
     else
         keywordArray=(daily);
         
@@ -333,19 +348,24 @@ pull_files () {
         fi;
 
         
-        echo -e "The retrieval array:\n${keywordArray[@]}\n";
+        .log debug "The backup type array:\n${keywordArray[@]}\n";
         echo ${keywordArray[1]};
         for keyword in ${keywordArray[@]}; do
             
             newFilePathName="${path}${serverName}_${siteName}_${keyword}_${currentDate}${fileExtension}"
+            .log debug "Copying to: ${newFilePathName}";
             cp ${destFilePathName} ${newFilePathName} 
         done;
 
         fileCount=$(ls ${path} | wc -l);
         
         if [[ ${fileCount} -ge 2 ]]; then
-            #rm ${destFilePathName};
+            .log info "Removing ${destFilePathName}";
+            rm ${destFilePathName};
+
+            .log debug "Attempting to rename the source file on the server to _old";
             ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+        echo "FAKE SSH RENAME NOW"
         fi
     fi
 
@@ -356,37 +376,33 @@ execute_things () {
         siteName="${2}";
         path="${destDir}${serverName}/${siteName}/";
         
+        .log debug "Starting execute_things ()";
+        .log info "Source: ${serverName} - ${siteName}";
+        .log debug "Calling is_directory () from execute_things ()";
+        is_directory ${path};
+
+        .log debug "Destination path: ${path}";
+
         if [[ ! -d ${path} ]]; then
+            .log warn "Destination path: NOT FOUND.\nAttempting to create ${path}";
             mkdir -p ${path};
         fi;
 
-        echo "********************";
-        echo "Pulling backup files";
-        echo -e "********************\n";
 
         pull_files $path $serverName $siteName;
 
-        echo "********************************"
-        echo "Starting rotation of daily files"
-        echo -e "********************************\n"
-
-        #daily_rotation $path;
+        .log debug "Calling daily_rotation ()";
+        daily_rotation $path;
         
         if [[ ${currentDay} == 01 ]]; then 
 
-            echo "**********************************"
-            echo "Starting rotation of monthly files"
-            echo -e "**********************************\n"
-
-        #    monthly_rotation $path;
+            .log debug "Calling monthly_rotation ()";
+             monthly_rotation $path;
 
             if [[ ${currentMonth} == 01 ]];  then
 
-                echo "*********************************"
-                echo "Starting rotation of yearly files"
-                echo -e "*********************************\n"
-
-        #        yearly_rotation $path;
+                .log debug "Calling yearly_rotation ()";
+                yearly_rotation $path;
             
             fi;
         fi;
@@ -395,38 +411,40 @@ execute_things () {
 
 main () {
     # For server name, find the sites then execute the pull and rotation on each site
+    .log debug "Starting main loop";
+
     for i in ${srcServerNames[@]}; do
         serverName="${i}";
+        .log debug "Starting on server: ${serverName}";
 
         case ${serverName} in
             doweb01)
                 for siteName in ${doweb01Sites[@]}; do
-                    echo "$serverName $siteName";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             dev01)
                 for siteName in ${dev01Sites[@]}; do
-                    echo "$serverName $siteName";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             lm) 
                 for siteName in ${lmSites[@]}; do
-                    echo "$serverName $siteName";
                     execute_things $serverName $siteName;
                 done;
                 ;;
             *)
-                echo "Something is missing from the main::case";
+                .log crit "main () :: received an invalid argument ${i}";
                 exit 1;
                 ;;
 
         esac
     done
+    .log info "End of main ()";
 }
 
-
 main;
+
+.log crit "End of script";
