@@ -18,7 +18,7 @@
 #   Added to the case statement in main ()
 #   Added as a variable: <<servername>>Sites to enumerate the websites to back up
 
-__LOGLEVEL=5
+__LOGLEVEL=2
 
 #logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
 logFilePath=/var/log/backupadmin/scriptedBackup.log
