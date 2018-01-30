@@ -16,7 +16,11 @@
 #   Added to the serverNameToIP array
 #   Added to the serverNameToUsername array
 #   Added to the case statement in main ()
+# 
+# Each site, on each <<servername>> must be:
 #   Added as a variable: <<servername>>Sites to enumerate the websites to back up
+#   Ex: dev01Sites = ("amm" "fft")
+#   Configured in the script on the target server
 
 __LOGLEVEL=2
 
@@ -56,8 +60,9 @@ declare -A serverNameToUsername
 serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7");
 serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle");
 
+# Must manually add/remove sites you wish to back up
 doweb01Sites=("amm" "mam")
-dev01Sites=("amm")
+dev01Sites=("amm" "fft")
 lmSites=("lm")
 
 identityFilePath="/home/webadmin/.ssh/id_rsa"
