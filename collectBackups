@@ -21,8 +21,9 @@
 #   Added as a variable: <<servername>>Sites to enumerate the websites to back up
 #   Ex: dev01Sites = ("amm" "fft")
 #   Configured in the script on the target server
+#   Must create directories on backup destination
 
-__LOGLEVEL=2
+__LOGLEVEL=4
 
 #logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
 logFilePath=/var/log/backupadmin/scriptedBackup.log
