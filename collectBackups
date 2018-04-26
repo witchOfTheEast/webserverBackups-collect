@@ -23,7 +23,7 @@
 #   Configured in the script on the target server
 #   Must create directories on backup destination
 
-__LOGLEVEL=4
+__LOGLEVEL=3
 
 #logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
 logFilePath=/var/log/backupadmin/scriptedBackup.log
@@ -53,7 +53,8 @@ timeStamp=$(date +%Y%m%0d-%H:%M:%S)
 declare srcServerNames
 
 # Must manually add/remove servers
-srcServerNames=("dev01" "doweb01" "lm" "amm-prod-web-01")
+srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
+#srcServerNames=("amm_prod_web_01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -61,15 +62,15 @@ declare -A serverNameToIP
 declare -A serverNameToUsername
 
 # Must manually add/remove servers
-serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm-prod-web-01]="97.93.161.252");
-serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm-prod-web-01]="backupadmin");
+serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm_prod_web_01]="97.93.161.252");
+serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm_prod_web_01]="backupadmin");
 
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement
 doweb01Sites=("amm" "mam")
 dev01Sites=("amm" "fft")
 lmSites=("lm")
-amm-prod-web-01Sites=("amm")
+amm_prod_web_01Sites=("amm")
 
 identityFilePath="/home/webadmin/.ssh/id_rsa"
 
@@ -447,8 +448,8 @@ main () {
                 done;
                 ;;
 
-            amm-prod-web-01) 
-                for siteName in ${amm-prod-web-01[@]}; do
+            amm_prod_web_01) 
+                for siteName in ${amm_prod_web_01Sites[@]}; do
                     execute_things $serverName $siteName;
                 done;
                 ;;
