@@ -49,22 +49,27 @@ timeStamp=$(date +%Y%m%0d-%H:%M:%S)
 .log debug "*****************"
 .log crit "${timeStamp}"
 
+
 declare srcServerNames
 
-srcServerNames=("dev01" "doweb01" "lm")
-#srcServerNames=("dev01")
+# Must manually add/remove servers
+srcServerNames=("dev01" "doweb01" "lm" "amm-prod-web-01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
 declare -A serverNameToIP
 declare -A serverNameToUsername
-serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7");
-serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle");
+
+# Must manually add/remove servers
+serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm-prod-web-01]="97.93.161.252");
+serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm-prod-web-01]="backupadmin");
 
 # Must manually add/remove sites you wish to back up
+# Any new sites need to be added to the case statement
 doweb01Sites=("amm" "mam")
 dev01Sites=("amm" "fft")
 lmSites=("lm")
+amm-prod-web-01Sites=("amm")
 
 identityFilePath="/home/webadmin/.ssh/id_rsa"
 
@@ -438,6 +443,12 @@ main () {
 
             lm) 
                 for siteName in ${lmSites[@]}; do
+                    execute_things $serverName $siteName;
+                done;
+                ;;
+
+            amm-prod-web-01) 
+                for siteName in ${amm-prod-web-01[@]}; do
                     execute_things $serverName $siteName;
                 done;
                 ;;
