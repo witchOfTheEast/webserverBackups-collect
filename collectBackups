@@ -22,13 +22,7 @@
 #   Ex: dev01Sites = ("amm" "fft")
 #   Configured in the script on the target server
 #   Must create directories on backup destination
-
-__LOGLEVEL=3
-
-#logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
-logFilePath=/var/log/backupadmin/scriptedBackup.log
-exec 1>>${logFilePath} 
-exec 2>>${logFilePath} 
+__LOGLEVEL=5
 
 declare -A logNameToLevel
 logNameToLevel=([crit]="1" [error]="2" [warn]="3" [info]="4" [debug]="5")
@@ -44,6 +38,21 @@ function .log () {
     fi;
 }
 
+test=0
+
+if [[ $1 == "-t" ]]; then
+    test=1;
+    echo "Test flag found."
+    
+    logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
+    .log debug "Basic check for argument found test flag"
+
+else
+    logFilePath=/var/log/backupadmin/scriptedBackup.log
+fi
+
+exec 1>>${logFilePath}
+exec 2>>${logFilePath} 
 
 timeStamp=$(date +%Y%m%0d-%H:%M:%S)
 .log debug "*****************"
@@ -54,7 +63,7 @@ declare srcServerNames
 
 # Must manually add/remove servers
 srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
-#srcServerNames=("amm_prod_web_01")
+#srcServerNames=("dev01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -67,8 +76,8 @@ serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlif
 
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement
-doweb01Sites=("amm" "mam")
-dev01Sites=("amm" "fft")
+doweb01Sites=("mam")
+dev01Sites=("amm" "fft" "ltr")
 lmSites=("lm")
 amm_prod_web_01Sites=("amm")
 
@@ -346,7 +355,7 @@ pull_files () {
     scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
 
     if ! [[ -e ${destFilePathName} ]]; then
-        .log  error "scp failed. NOT FOUND - ${destFilePathName}";
+        .log  error "scp failed. backup file on destination not found NOT FOUND - ${destFilePathName}";
         #echo "scp failed. NOT FOUND - ${destFilePathName}";
     else
         keywordArray=(daily);
@@ -370,14 +379,17 @@ pull_files () {
         done;
 
         fileCount=$(ls ${path} | wc -l);
-        
-        if [[ ${fileCount} -ge 2 ]]; then
-            .log info "Removing ${destFilePathName}";
-            rm ${destFilePathName};
+       
+        if [[ $test -ne 1 ]]; then 
+            if [[ ${fileCount} -ge 2 ]]; then
+                .log info "Removing ${destFilePathName}";
+                rm ${destFilePathName};
 
-            .log debug "Attempting to rename the source file on the server to _old";
-            ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
-        echo "FAKE SSH RENAME NOW"
+                .log debug "Attempting to rename the source file on the server to _old";
+                ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+            fi
+        else
+            .log info "Testing flag found. Source files not removed/renamed."
         fi
     fi
 
