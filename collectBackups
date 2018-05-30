@@ -22,6 +22,8 @@
 #   Ex: dev01Sites = ("amm" "fft")
 #   Configured in the script on the target server
 #   Must create directories on backup destination
+echo "$(date) - start of script" >> ~/magicFile
+
 __LOGLEVEL=5
 
 declare -A logNameToLevel
@@ -63,7 +65,7 @@ declare srcServerNames
 
 # Must manually add/remove servers
 srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
-#srcServerNames=("dev01")
+#srcServerNames=("amm_prod_web_01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -79,7 +81,7 @@ serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlif
 doweb01Sites=("mam")
 dev01Sites=("amm" "fft" "ltr")
 lmSites=("lm")
-amm_prod_web_01Sites=("amm")
+amm_prod_web_01Sites=("amm" "fft")
 
 identityFilePath="/home/webadmin/.ssh/id_rsa"
 
@@ -387,6 +389,7 @@ pull_files () {
 
                 .log debug "Attempting to rename the source file on the server to _old";
                 ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                .log crit "Attempt results: ${?}";
             fi
         else
             .log info "Testing flag found. Source files not removed/renamed."
