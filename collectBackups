@@ -64,8 +64,8 @@ timeStamp=$(date +%Y%m%0d-%H:%M:%S)
 declare srcServerNames
 
 # Must manually add/remove servers
-srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
-#srcServerNames=("amm_prod_web_01")
+srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
+#srcServerNames=("gd_prod_web_02")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -73,8 +73,10 @@ declare -A serverNameToIP
 declare -A serverNameToUsername
 
 # Must manually add/remove servers
-serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm_prod_web_01]="97.93.161.252");
-serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm_prod_web_01]="backupadmin");
+serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm_prod_web_01]="97.93.161.252" [gd_prod_web_02]="166.62.108.22");
+serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm_prod_web_01]="backupadmin" [gd_prod_web_02]="i4843259938378");
+
+cursosFileNamePath="/home/webadmin/scripts/webserverBackups-collect/.cursos"
 
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement
@@ -82,6 +84,7 @@ doweb01Sites=("mam")
 dev01Sites=("amm" "fft" "ltr")
 lmSites=("lm")
 amm_prod_web_01Sites=("amm" "fft")
+gd_prod_web_02Sites=("cursos")
 
 identityFilePath="/home/webadmin/.ssh/id_rsa"
 
@@ -117,7 +120,12 @@ is_directory () {
         exit 1;
     elif [[ ! -d "${path}" ]]; then
         .log crit "is_directory () :: ${path} is not a valid directory";
-        exit 1;
+        .log crit "attempting to create ${path}";
+        mkdir -p "${path}";
+        if [[ $? != 0 ]]; then
+            .log crit "creation failed. Exiting.";
+            exit 1;
+        fi
     else
         .log debug "is_directory (${path}) is true";
         .log debug "Returning from is_directory ()";
@@ -353,8 +361,19 @@ pull_files () {
     destFilePathName="${path}${serverName}_${siteName}_${currentDate}${fileExtension}"
     .log info "Destination File: ${destFilePathName}";
 
-    .log debug "Running: scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
-    scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+    if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
+
+        .log debug "Attemping to trigger the generate script on the far side";
+        sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "./ammBackupScript/generateBackupFiles-gd-prod-cursos";
+        sleep 10m;
+
+        .log debug "Running: sshpass -f ${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
+        sshpass -f${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+
+        else
+            .log debug "Running: scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
+            scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+    fi
 
     if ! [[ -e ${destFilePathName} ]]; then
         .log  error "scp failed. backup file on destination not found NOT FOUND - ${destFilePathName}";
@@ -387,9 +406,18 @@ pull_files () {
                 .log info "Removing ${destFilePathName}";
                 rm ${destFilePathName};
 
-                .log debug "Attempting to rename the source file on the server to _old";
-                ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
-                .log crit "Attempt results: ${?}";
+                if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
+
+                    .log debug "Attempting to rename the source file on the server to _old";
+                    sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                    .log crit "Attempt results: ${?}";
+
+                    else
+     
+                        .log debug "Attempting to rename the source file on the server to _old";
+                        ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        .log crit "Attempt results: ${?}";
+                fi
             fi
         else
             .log info "Testing flag found. Source files not removed/renamed."
@@ -453,6 +481,12 @@ main () {
 
             dev01)
                 for siteName in ${dev01Sites[@]}; do
+                    execute_things $serverName $siteName;
+                done;
+                ;;
+
+            gd_prod_web_02) 
+                for siteName in ${gd_prod_web_02Sites[@]}; do
                     execute_things $serverName $siteName;
                 done;
                 ;;
