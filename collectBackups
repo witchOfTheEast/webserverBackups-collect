@@ -22,9 +22,8 @@
 #   Ex: dev01Sites = ("amm" "fft")
 #   Configured in the script on the target server
 #   Must create directories on backup destination
-echo "$(date) - start of script" >> ~/magicFile
 
-__LOGLEVEL=5
+__LOGLEVEL=4
 
 declare -A logNameToLevel
 logNameToLevel=([crit]="1" [error]="2" [warn]="3" [info]="4" [debug]="5")
@@ -57,15 +56,18 @@ exec 1>>${logFilePath}
 exec 2>>${logFilePath} 
 
 timeStamp=$(date +%Y%m%0d-%H:%M:%S)
-.log debug "*****************"
+.log crit "\n===Beginning of script run==="
 .log crit "${timeStamp}"
-
 
 declare srcServerNames
 
+# Until the cursos site moves away from GoDaddy we must trigger
+# the archiving script from here and wait for it to complete
+sleepTime=10
+
 # Must manually add/remove servers
 srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
-#srcServerNames=("gd_prod_web_02")
+#srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -79,7 +81,7 @@ serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlif
 cursosFileNamePath="/home/webadmin/scripts/webserverBackups-collect/.cursos"
 
 # Must manually add/remove sites you wish to back up
-# Any new sites need to be added to the case statement
+# Any new sites need to be added to the case statement near the end of the script
 doweb01Sites=("mam")
 dev01Sites=("amm" "fft" "ltr")
 lmSites=("lm")
@@ -91,9 +93,7 @@ identityFilePath="/home/webadmin/.ssh/id_rsa"
 currentDate="$(date +%Y%m%0d)"
 currentYear="$(date +%Y)"
 currentMonth="$(date +%m)"
-#currentMonth="01"
 currentDay="$(date +%0d)"
-#currentDay="01"
 
 maxYears=6
 
@@ -112,22 +112,22 @@ is_directory () {
     # Argument: $1 -> path
 
     path="${1}";
-    .log debug "Starting is_directory ()";
+    .log debug "Beginning of is_directory ()";
     .log debug "Testing ${path}";
 
     if [[ -z "${path}" ]]; then
-        .log crit "is_directory () :: received argument of length 0";
+        .log crit "FAILED: is_directory () :: received argument of length 0";
         exit 1;
     elif [[ ! -d "${path}" ]]; then
-        .log crit "is_directory () :: ${path} is not a valid directory";
-        .log crit "attempting to create ${path}";
+        .log error "is_directory () :: ${path} is not a valid directory";
+        .log info "${path} not found. Attempting to create ${path}";
         mkdir -p "${path}";
         if [[ $? != 0 ]]; then
-            .log crit "creation failed. Exiting.";
+            .log crit "FAILED: Creating ${path} was unsuccessful. Exiting.";
             exit 1;
         fi
     else
-        .log debug "is_directory (${path}) is true";
+        .log debug "Success: is_directory (${path}) found ${path}";
         .log debug "Returning from is_directory ()";
     fi;
 }
@@ -137,9 +137,10 @@ list_files () {
     #
     # Arguments: $1 -> a directory path
     
-    .log debug "Starting list_files ()";
+    # .log debug "Beginning of list_files ()";
     is_directory $1;
     ls $1;
+   
 
 }
 
@@ -153,11 +154,11 @@ count_files () {
     path=${1};
     keyword="${2}";
 
-    #cannot make this log entry
+    # For some reason the script cannot make this log entry
     #.log debug "Starting count_files ()";
 
     if [[ -z "${keyword}" ]]; then
-        .log error "count_files () :: Received invalid argument: $2";
+        .log crit "FAILED: count_files () :: Received invalid argument: $2";
         exit 1;
 
     else
@@ -175,7 +176,7 @@ count_files () {
                 ;;
                 
             *)
-                .log error "count_files:case :: Received invalid argument: $2";
+                .log crit "FAILED: count_files:case :: Received invalid argument: $2";
                 exit 1;
                 ;;
         esac;
@@ -187,27 +188,31 @@ daily_rotation () {
     #
     # Arguments: $1 -> a directory path
     path=${1};
-    .log debug "Starting daily_rotation ()";
+    .log info "Beginning daily_rotation ()";
+    .log debug "Target path for daily_rotation ():${path}";
     
     keyword="daily";
 
     fileCount=$(count_files ${path} ${keyword});
    
-    .log debug "Initial number of ${keyword} files: ${fileCount}";
+    .log info "Initial number of ${keyword} files: ${fileCount}";
     if [[ "${fileCount}" -ge 7 ]]; then
-        .log debug "Finding files older than ${currentDate} - 7 days";
+        .log debug "Find files older than ${currentDate} - 7 days";
         find ${path} -mtime +7 -iname "*daily*";
         
-        .log info "Old $keyword files ''deleted'' to ${oldDir}";
-        find ${path} -mtime +7 -iname "*daily*" -exec mv '{}' ${oldDir} \; ;
+        #.log info "Old $keyword files ''deleted'' to ${oldDir}";
+        #find ${path} -mtime +7 -iname "*daily*" -exec mv '{}' ${oldDir} \; ;
+
+        .log info "Removing old $keyword files";
+        find ${path} -mtime +7 -iname "*daily*" -exec rm '{}' \; ;
         
     fi;
      
     
     fileCount=$(count_files $path $keyword);
-    .log debug "Ending number of $keyword files: $fileCount";
-
+    .log info "Ending number of $keyword files: $fileCount";
     .log debug "Folder contents:\n$(ls $path | grep $keyword)";
+    .log debug "Returning from daily_rotation ()";
 
 }
 
@@ -217,7 +222,7 @@ monthly_rotation() {
     #
     # Arguments: $1 -> a directory path
 
-    .log debug "Starting monthly rotation ()";
+    .log info "Beginning monthly rotation ()";
 
     path=${1};
 
@@ -225,7 +230,7 @@ monthly_rotation() {
 
     fileCount=$(count_files $path $keyword);
     
-    .log debug "Initial number of $keyword files: $fileCount";
+    .log info "Initial number of $keyword files: $fileCount";
 
     .log debug "$(ls ${path} | grep $keyword)";
 
@@ -257,8 +262,8 @@ monthly_rotation() {
         if [[ ${numberOfElements} -gt 1 ]]; then
                 .log debug  "Items to delete:\n";
                 .log debug ${selectedYearMonth[@]:1:${lastIndex}} | tr " " "\n";
-                .log debug "Deleting...";
-            rm $(echo ${selectedYearMonth[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
+                .log info "Removing old $keyword files";
+                rm $(echo ${selectedYearMonth[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
                 .log debug "The remaining files:\n";    
                 .log debug $(ls ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth});
@@ -271,9 +276,11 @@ monthly_rotation() {
 
     done;
     
+    fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxMonths} $keyword files\n";
-
+    .log info "Ending number of $keyword files";
     .log debug $(ls ${path} | grep $keyword);
+    .log debug "Returning from monthly_rotation ()";
 }
 
 yearly_rotation() {
@@ -281,7 +288,7 @@ yearly_rotation() {
     # Remove files older than 5 years from a directory
     # For files younger that 5 years, remove all but the oldest file in that year
     #echo "";
-    .log debug "Starting yearly_rotation";
+    .log info "Starting yearly_rotation";
 
     path=$1
 
@@ -289,7 +296,7 @@ yearly_rotation() {
    
     fileCount=$(count_files $path $keyword);
     
-    .log debug "Starting number of $keyword files: $fileCount";
+    .log info "Starting number of $keyword files: $fileCount";
 
     .log debug "$(ls ${path} | grep yearly)";
 
@@ -317,7 +324,7 @@ yearly_rotation() {
         if [[ ${numberOfElements} -gt 1 ]]; then
                 .log debug "Items to delete:\n";
                 .log debug $(echo ${selectedYear[@]:1:${lastIndex}} | tr " " "\n");
-                .log debug "Deleting...";
+                .log info "Removing old $keyword files";
 
             rm $(echo ${selectedYear[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
@@ -332,9 +339,11 @@ yearly_rotation() {
 
     done;
 
+    fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxYears} ${keyword} files\n";
-
+    .log info "Ending number of $keyword files";
     .log debug "$(ls ${path} | grep yearly)";
+    .log debug "Returning from yearly_rotation ()";
 
 }
 
@@ -346,11 +355,13 @@ pull_files () {
     #            $2 -> server name
     #            $3  -> site name
     
-    .log debug "Starting pull_files ()";
+    .log info "Beginning pull_files ()";
     path="${1}"; 
     serverName=${2};
     siteName=${3};
    
+    .log info "Pulling from ${serverName} ${siteName}";
+
     serverIP=${serverNameToIP[${serverName}]};
     serverUsername=${serverNameToUsername[$serverName]};
     .log debug "IP: ${serverIP}";
@@ -362,10 +373,12 @@ pull_files () {
     .log info "Destination File: ${destFilePathName}";
 
     if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
+        .log debug "Special action for ${serverName} ${siteName}";
 
         .log debug "Attemping to trigger the generate script on the far side";
         sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "./ammBackupScript/generateBackupFiles-gd-prod-cursos";
-        sleep 10m;
+        .log info "Resting ${sleepTime} while cursos script generates files"
+        sleep ${sleepTime};
 
         .log debug "Running: sshpass -f ${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
         sshpass -f${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
@@ -373,76 +386,100 @@ pull_files () {
         else
             .log debug "Running: scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
             scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+            results="${?}"
+            .log debug "Results of the scp: ${results}";
+
+            if [[ ${results} == 0 ]]; then
+                .log info "scp exited without complaint";
+            else
+                .log error "ERROR: scp exited with ${results}. Something is wrong.";
+            fi
     fi
 
     if ! [[ -e ${destFilePathName} ]]; then
-        .log  error "scp failed. backup file on destination not found NOT FOUND - ${destFilePathName}";
+        .log  error "\nERROR: scp failed. Possibly the backup file on destination not found NOT FOUND - ${destFilePathName}\n";
         #echo "scp failed. NOT FOUND - ${destFilePathName}";
-    else
-        keywordArray=(daily);
-        
-        if [[ "${currentMonth}${currentDay}" == 0101 ]]; then
-            keywordArray+=("yearly");
-        fi;
-        
-        if [[ "${currentDay}" == 01 ]]; then
-            keywordArray+=("monthly");
-        fi;
 
-        
-        .log debug "The backup type array:\n${keywordArray[@]}\n";
-        echo ${keywordArray[1]};
-        for keyword in ${keywordArray[@]}; do
-            
-            newFilePathName="${path}${serverName}_${siteName}_${keyword}_${currentDate}${fileExtension}"
-            .log debug "Copying to: ${newFilePathName}";
-            cp ${destFilePathName} ${newFilePathName} 
-        done;
-
-        fileCount=$(ls ${path} | wc -l);
-       
-        if [[ $test -ne 1 ]]; then 
-            if [[ ${fileCount} -ge 2 ]]; then
-                .log info "Removing ${destFilePathName}";
-                rm ${destFilePathName};
-
-                if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
-
-                    .log debug "Attempting to rename the source file on the server to _old";
-                    sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
-                    .log crit "Attempt results: ${?}";
-
-                    else
-     
-                        .log debug "Attempting to rename the source file on the server to _old";
-                        ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
-                        .log crit "Attempt results: ${?}";
-                fi
-            fi
         else
-            .log info "Testing flag found. Source files not removed/renamed."
-        fi
+            .log debug "Creating daily|monthly|yearly files";
+
+            keywordArray=(daily);
+            
+            if [[ "${currentMonth}${currentDay}" == 0101 ]]; then
+                .log info "Happy New Year! Today is ${currentMonth}${currentDay}. Create yearly.";
+                keywordArray+=("yearly");
+            fi;
+            
+            if [[ "${currentDay}" == 01 ]]; then
+                .log info "RabbitRabbit. Today is ${currentDay}st of the month. Create monthly.";
+                keywordArray+=("monthly");
+            fi;
+
+            .log debug "Backup types to create: ${keywordArray[@]}";
+
+            for keyword in ${keywordArray[@]}; do
+                
+                newFilePathName="${path}${serverName}_${siteName}_${keyword}_${currentDate}${fileExtension}"
+                .log debug "Copying to: ${newFilePathName}";
+                cp ${destFilePathName} ${newFilePathName} 
+            done;
+
+            fileCount=$(ls ${path} | wc -l);
+           
+            if [[ $test -ne 1 ]]; then 
+                if [[ ${fileCount} -ge 2 ]]; then
+                    .log info "Removing ${destFilePathName}";
+                    rm ${destFilePathName};
+
+                    if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
+
+                        .log debug "Attempting to rename the source file on ${serverName} to ${srcFileNamePath}_old";
+                        sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        results="${?}";
+                        .log crit "Attempt results: ${results}";
+
+                        else
+         
+                            .log debug "Attempting to rename the source file on the server to _old";
+                            ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                            results="${?}";
+                            .log crit "Attempt results: ${?}";
+                    fi
+                fi
+            else
+                .log info "Testing flag found. Source files not removed/renamed."
+            fi
     fi
 
+    .log debug "Returning from pull_files ()";
 }
 
 execute_things () {
         serverName="${1}";
         siteName="${2}";
         path="${destDir}${serverName}/${siteName}/";
+
+        .log info "******next site";
         
-        .log debug "Starting execute_things ()";
-        .log info "Source: ${serverName} - ${siteName}";
-        .log debug "Calling is_directory () from execute_things ()";
+        .log debug "Beginning execute_things ()";
+        .log info "Active site: ${siteName}";
+        .log debug "Calling is_directory ()";
         is_directory ${path};
 
-        .log debug "Destination path: ${path}";
+        .log info "Destination path: ${path}";
 
         if [[ ! -d ${path} ]]; then
             .log warn "Destination path: NOT FOUND.\nAttempting to create ${path}";
             mkdir -p ${path};
-        fi;
+            results="${?}";
+            if [[ $results != 0 ]]; then
+                .log crit "FAILED: Could not create ${page}";
+                exit 1;
+            fi
 
+        fi;
+        
+        .log debug "Calling pull_files ()";
 
         pull_files $path $serverName $siteName;
 
@@ -462,43 +499,50 @@ execute_things () {
             fi;
         fi;
 
+        .log debug "Returning from execute_things ()";
 }
 
 main () {
     # For server name, find the sites then execute the pull and rotation on each site
-    .log debug "Starting main loop";
+    .log debug "Beginning main ()";
 
     for i in ${srcServerNames[@]}; do
         serverName="${i}";
-        .log debug "Starting on server: ${serverName}";
+        .log info "****next server";
+        .log debug "Active server: ${serverName}";
 
         case ${serverName} in
             doweb01)
                 for siteName in ${doweb01Sites[@]}; do
+                    .log debug "Calling execute_things ()";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             dev01)
                 for siteName in ${dev01Sites[@]}; do
+                    .log debug "Calling execute_things ()";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             gd_prod_web_02) 
                 for siteName in ${gd_prod_web_02Sites[@]}; do
+                    .log debug "Calling execute_things ()";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             lm) 
                 for siteName in ${lmSites[@]}; do
+                    .log debug "Calling execute_things ()";
                     execute_things $serverName $siteName;
                 done;
                 ;;
 
             amm_prod_web_01) 
                 for siteName in ${amm_prod_web_01Sites[@]}; do
+                    .log debug "Calling execute_things ()";
                     execute_things $serverName $siteName;
                 done;
                 ;;
