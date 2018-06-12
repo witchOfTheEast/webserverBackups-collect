@@ -211,7 +211,7 @@ daily_rotation () {
     
     fileCount=$(count_files $path $keyword);
     .log info "Ending number of $keyword files: $fileCount";
-    .log debug "Folder contents:\n$(ls $path | grep $keyword)";
+    .log debug "Folder contents:\n$(ls -lh $path | grep $keyword)";
     .log debug "Returning from daily_rotation ()";
 
 }
@@ -232,7 +232,7 @@ monthly_rotation() {
     
     .log info "Initial number of $keyword files: $fileCount";
 
-    .log debug "$(ls ${path} | grep $keyword)";
+    .log debug "$(ls -lh ${path} | grep $keyword)";
 
     .log debug "Finding files older than $(expr 346 / 30 ) months";
 
@@ -266,7 +266,7 @@ monthly_rotation() {
                 rm $(echo ${selectedYearMonth[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
                 .log debug "The remaining files:\n";    
-                .log debug $(ls ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth});
+                .log debug $(ls -lh ${path} | grep $keyword | grep ${activeYear} | grep ${activeMonth});
 
             else
                 .log info "One file found per year/month, no additional files deleted";
@@ -279,7 +279,7 @@ monthly_rotation() {
     fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxMonths} $keyword files\n";
     .log info "Ending number of $keyword files";
-    .log debug $(ls ${path} | grep $keyword);
+    .log debug $(ls -lh ${path} | grep $keyword);
     .log debug "Returning from monthly_rotation ()";
 }
 
@@ -298,7 +298,7 @@ yearly_rotation() {
     
     .log info "Starting number of $keyword files: $fileCount";
 
-    .log debug "$(ls ${path} | grep yearly)";
+    .log debug "$(ls -lh ${path} | grep yearly)";
 
     .log debug "Finding files older than $(expr 1825 / 365) years.";
     # 5 years equals 1825 days
@@ -329,7 +329,7 @@ yearly_rotation() {
             rm $(echo ${selectedYear[@]:1:${lastIndex}} | awk -F, 'BEGIN { RS = " " }; { print $5 }');
 
                 .log debug "Confirming the remaining files:\n";    
-                .log debug $(ls ${path} | grep ${activeYear});
+                .log debug $(ls -lh ${path} | grep ${activeYear});
 
             else
                 .log debug "One file found per year. No additional files to delete.";
@@ -342,7 +342,7 @@ yearly_rotation() {
     fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxYears} ${keyword} files\n";
     .log info "Ending number of $keyword files";
-    .log debug "$(ls ${path} | grep yearly)";
+    .log debug "$(ls -lh ${path} | grep yearly)";
     .log debug "Returning from yearly_rotation ()";
 
 }
