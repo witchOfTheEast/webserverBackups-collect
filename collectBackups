@@ -211,7 +211,7 @@ daily_rotation () {
     
     fileCount=$(count_files $path $keyword);
     .log info "Ending number of $keyword files: $fileCount";
-    .log debug "Folder contents:\n$(ls -lh $path | grep $keyword)";
+    .log info "$(ls -lh $path | grep $keyword)";
     .log debug "Returning from daily_rotation ()";
 
 }
@@ -278,8 +278,8 @@ monthly_rotation() {
     
     fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxMonths} $keyword files\n";
-    .log info "Ending number of $keyword files";
-    .log debug $(ls -lh ${path} | grep $keyword);
+    .log info "Ending number of $keyword files: $fileCount";
+    .log info "$(ls -lh ${path} | grep $keyword)";
     .log debug "Returning from monthly_rotation ()";
 }
 
@@ -341,8 +341,8 @@ yearly_rotation() {
 
     fileCount=$(count_files $path $keyword);
     .log debug "Now there should be a maximum of ${maxYears} ${keyword} files\n";
-    .log info "Ending number of $keyword files";
-    .log debug "$(ls -lh ${path} | grep yearly)";
+    .log info "Ending number of $keyword files: $fileCount";
+    .log info "$(ls -lh ${path} | grep yearly)";
     .log debug "Returning from yearly_rotation ()";
 
 }
