@@ -196,9 +196,10 @@ daily_rotation () {
     fileCount=$(count_files ${path} ${keyword});
    
     .log info "Initial number of ${keyword} files: ${fileCount}";
+
     if [[ "${fileCount}" -ge 7 ]]; then
         .log debug "Find files older than ${currentDate} - 7 days";
-        find ${path} -mtime +7 -iname "*daily*";
+        .log debug "$(find ${path} -mtime +7 -iname "*daily*")";
         
         #.log info "Old $keyword files ''deleted'' to ${oldDir}";
         #find ${path} -mtime +7 -iname "*daily*" -exec mv '{}' ${oldDir} \; ;
@@ -360,7 +361,7 @@ pull_files () {
     serverName=${2};
     siteName=${3};
    
-    .log info "Pulling from ${serverName} ${siteName}";
+    .log debug "Pulling from ${serverName} ${siteName}";
 
     serverIP=${serverNameToIP[${serverName}]};
     serverUsername=${serverNameToUsername[$serverName]};
@@ -428,7 +429,7 @@ pull_files () {
            
             if [[ $test -ne 1 ]]; then 
                 if [[ ${fileCount} -ge 2 ]]; then
-                    .log info "Removing ${destFilePathName}";
+                    .log debug "Removing ${destFilePathName}";
                     rm ${destFilePathName};
 
                     if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
@@ -436,14 +437,14 @@ pull_files () {
                         .log debug "Attempting to rename the source file on ${serverName} to ${srcFileNamePath}_old";
                         sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
                         results="${?}";
-                        .log crit "Attempt results: ${results}";
+                        .log debug "Attempt results: ${results}";
 
                         else
          
                             .log debug "Attempting to rename the source file on the server to _old";
                             ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
                             results="${?}";
-                            .log crit "Attempt results: ${?}";
+                            .log debug "Attempt results: ${?}";
                     fi
                 fi
             else
@@ -509,7 +510,7 @@ main () {
     for i in ${srcServerNames[@]}; do
         serverName="${i}";
         .log info "****next server";
-        .log debug "Active server: ${serverName}";
+        .log info "Active server: ${serverName}";
 
         case ${serverName} in
             doweb01)
