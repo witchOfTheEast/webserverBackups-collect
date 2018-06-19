@@ -83,7 +83,7 @@ cursosFileNamePath="/home/webadmin/scripts/webserverBackups-collect/.cursos"
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement near the end of the script
 doweb01Sites=("mam")
-dev01Sites=("amm" "fft" "ltr")
+dev01Sites=("ltr")
 lmSites=("lm")
 amm_prod_web_01Sites=("amm" "fft")
 gd_prod_web_02Sites=("cursos")
