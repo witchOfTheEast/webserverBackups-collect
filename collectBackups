@@ -67,7 +67,7 @@ sleepTime=10
 
 # Must manually add/remove servers
 srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
-#srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01")
+#srcServerNames=("dev01")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -83,7 +83,7 @@ cursosFileNamePath="/home/webadmin/scripts/webserverBackups-collect/.cursos"
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement near the end of the script
 doweb01Sites=("mam")
-dev01Sites=("ltr")
+dev01Sites=("ltr" "mam")
 lmSites=("lm")
 amm_prod_web_01Sites=("amm" "fft")
 gd_prod_web_02Sites=("cursos")
