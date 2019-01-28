@@ -23,7 +23,7 @@
 #   Configured in the script on the target server
 #   Must create directories on backup destination
 
-__LOGLEVEL=4
+__LOGLEVEL=5
 
 declare -A logNameToLevel
 logNameToLevel=([crit]="1" [error]="2" [warn]="3" [info]="4" [debug]="5")
@@ -41,15 +41,21 @@ function .log () {
 
 test=0
 
+regularLogDir="/var/log/scriptedBackups"
+
 if [[ $1 == "-t" ]]; then
     test=1;
     echo "Test flag found."
     
-    logFilePath=/home/webadmin/scripts/webserverBackups-collect/logFile
+    logFilePath=/home/$USER/scripts/webserverBackups-collect/logFile
     .log debug "Basic check for argument found test flag"
 
 else
-    logFilePath=/var/log/backupadmin/scriptedBackup.log
+    if ! [[ -d "$regularLogDir" ]]; then
+        mkdir "$regulardLogDir" || echo "failed to create $regularLogDir"; exit 1
+    fi
+    logFilePath="${regularLogDir}/scriptedBackup.log"
+
 fi
 
 exec 1>>${logFilePath}
@@ -66,8 +72,8 @@ declare srcServerNames
 sleepTime=10
 
 # Must manually add/remove servers
-srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
-#srcServerNames=("dev01")
+#srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
+srcServerNames=("gd_prod_web_02")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -75,10 +81,10 @@ declare -A serverNameToIP
 declare -A serverNameToUsername
 
 # Must manually add/remove servers
-serverNameToIP=([dev01]="97.93.161.250" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm_prod_web_01]="97.93.161.252" [gd_prod_web_02]="166.62.108.22");
+serverNameToIP=([dev01]="172.16.208.18" [doweb01]="138.68.22.173" [lm]="198.71.227.7" [amm_prod_web_01]="172.16.208.20" [gd_prod_web_02]="166.62.108.22");
 serverNameToUsername=([dev01]="backupadmin" [doweb01]="backupadmin" [lm]="fftlifestyle" [amm_prod_web_01]="backupadmin" [gd_prod_web_02]="i4843259938378");
 
-cursosFileNamePath="/home/webadmin/scripts/webserverBackups-collect/.cursos"
+cursosFileNamePath="/home/$USER/scripts/webserverBackups-collect/.cursos"
 
 # Must manually add/remove sites you wish to back up
 # Any new sites need to be added to the case statement near the end of the script
@@ -88,7 +94,7 @@ lmSites=("lm")
 amm_prod_web_01Sites=("amm" "fft" "ltr")
 gd_prod_web_02Sites=("cursos")
 
-identityFilePath="/home/webadmin/.ssh/id_rsa"
+identityFilePath="/home/$USER/.ssh/id_rsa"
 
 currentDate="$(date +%Y%m%0d)"
 currentYear="$(date +%Y)"
@@ -102,8 +108,17 @@ oldestYear=$(expr $currentYear - $maxYears)
 maxMonths=12 # This doesn't actually do anything. The number of months to use 
              #is set in the for loop within monthly_rotation ()
 
-destDir="/home/webadmin/backups/"
-oldDir="/home/webadmin/backups/removedBackups/"
+destDir="/storage/website_backups/"
+oldDir="/storage/website_backups/removedBackups/"
+
+echo "before"
+for i in "$destDir" "$oldDir"; do
+    if ! [[ -d "$i" ]]; then
+        mkdir "$i" || echo "failed to create $i"; exit 1
+    fi
+done
+
+echo "after"
 fileExtension=".tar.gz"
 
 is_directory () {
@@ -377,12 +392,16 @@ pull_files () {
         .log debug "Special action for ${serverName} ${siteName}";
 
         .log debug "Attemping to trigger the generate script on the far side";
-        sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "./ammBackupScript/generateBackupFiles-gd-prod-cursos";
+         ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > /ammBackupScript/scriptedBackup.log 2>&1 &";
+	## The cursos site server finally using keys
+        ## leaving the sshpass lines for a while just in case we have to revert
+        #sshpass -vvv -f "${cursosFileNamePath}" ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > /ammBackupScript/scriptedBackup.log 2>&1 &";
         .log info "Resting ${sleepTime} while cursos script generates files"
         sleep ${sleepTime};
 
         .log debug "Running: sshpass -f ${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
-        sshpass -f${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+        scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
+        #sshpass -f${cursosFileNamePath} scp ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName};
 
         else
             .log debug "Running: scp -i ${identityFilePath} ${serverUsername}@${serverIP}:${srcFileNamePath} ${destFilePathName}";
@@ -435,7 +454,8 @@ pull_files () {
                     if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
 
                         .log debug "Attempting to rename the source file on ${serverName} to ${srcFileNamePath}_old";
-                        sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        ssh -v ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        #sshpass -f${cursosFileNamePath} ssh -v ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
                         results="${?}";
                         .log debug "Attempt results: ${results}";
 
