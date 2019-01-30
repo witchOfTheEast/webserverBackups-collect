@@ -23,7 +23,7 @@
 #   Configured in the script on the target server
 #   Must create directories on backup destination
 
-__LOGLEVEL=5
+__LOGLEVEL=4
 
 declare -A logNameToLevel
 logNameToLevel=([crit]="1" [error]="2" [warn]="3" [info]="4" [debug]="5")
@@ -69,11 +69,11 @@ declare srcServerNames
 
 # Until the cursos site moves away from GoDaddy we must trigger
 # the archiving script from here and wait for it to complete
-sleepTime=10
+sleepTime=180
 
 # Must manually add/remove servers
-#srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
-srcServerNames=("gd_prod_web_02")
+srcServerNames=("dev01" "doweb01" "lm" "amm_prod_web_01" "gd_prod_web_02")
+#srcServerNames=("lm")
 .log debug "List of servers to pull from: ${srcServerNames[@]}"
 
 # Declaring this is important because later indexing from the array doesn't get the right value otherwise
@@ -111,14 +111,12 @@ maxMonths=12 # This doesn't actually do anything. The number of months to use
 destDir="/storage/website_backups/"
 oldDir="/storage/website_backups/removedBackups/"
 
-echo "before"
 for i in "$destDir" "$oldDir"; do
     if ! [[ -d "$i" ]]; then
         mkdir "$i" || echo "failed to create $i"; exit 1
     fi
 done
 
-echo "after"
 fileExtension=".tar.gz"
 
 is_directory () {
@@ -392,10 +390,10 @@ pull_files () {
         .log debug "Special action for ${serverName} ${siteName}";
 
         .log debug "Attemping to trigger the generate script on the far side";
-         ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > /ammBackupScript/scriptedBackup.log 2>&1 &";
+         ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > ./ammBackupScript/scriptedBackup.log 2>&1 &";
 	## The cursos site server finally using keys
         ## leaving the sshpass lines for a while just in case we have to revert
-        #sshpass -vvv -f "${cursosFileNamePath}" ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > /ammBackupScript/scriptedBackup.log 2>&1 &";
+        #sshpass -f "${cursosFileNamePath}" ssh ${serverUsername}@${serverIP} "nohup sh ./ammBackupScript/generateBackupFiles-gd-prod-cursos < /dev/null > /ammBackupScript/scriptedBackup.log 2>&1 &";
         .log info "Resting ${sleepTime} while cursos script generates files"
         sleep ${sleepTime};
 
@@ -454,15 +452,15 @@ pull_files () {
                     if [[ ${serverName} == "gd_prod_web_02" && ${siteName} == "cursos" ]]; then
 
                         .log debug "Attempting to rename the source file on ${serverName} to ${srcFileNamePath}_old";
-                        ssh -v ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
-                        #sshpass -f${cursosFileNamePath} ssh -v ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                        #sshpass -f${cursosFileNamePath} ssh ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
                         results="${?}";
                         .log debug "Attempt results: ${results}";
 
                         else
          
                             .log debug "Attempting to rename the source file on the server to _old";
-                            ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "cp ${srcFileNamePath} ${srcFileNamePath}_old && rm ${srcFileNamePath}";
+                            ssh -i ${identityFilePath} ${serverUsername}@${serverIP} "nohup cp ${srcFileNamePath} ${srcFileNamePath}_old < /dev/null >> ./copy_log 2>&1 && nohup rm ${srcFileNamePath} < /dev/null >> ./copy_log 2>&1";
                             results="${?}";
                             .log debug "Attempt results: ${?}";
                     fi
